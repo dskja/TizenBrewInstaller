@@ -138,7 +138,7 @@ module.exports.onStart = function () {
                 return wsConn.send(wsConn.Event(Events.Error, `Invalid JSON: ${message}`));
             }
 
-            function parseAndInstall(buffer) {
+            function parseAndInstall(buffer, repoUrl) {
                 parsePackage(buffer)
                     .then(pkg => {
                         wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.installing'));
@@ -156,7 +156,7 @@ module.exports.onStart = function () {
                             return;
                         }
 
-                        if (payload.url && payload.url === 'reisxd/TizenBrewInstaller' &&
+                        if (repoUrl && repoUrl === 'reisxd/TizenBrewInstaller' &&
                             !isTV && existsSync(`${homedir()}/share/tizenbrewInstallerConfig.json`)) {
                             // Send the existing config to the TV
                             PushFile(adbClient, '/home/owner/share/tizenbrewInstallerConfig.json', readFileSync(`${homedir()}/share/tizenbrewInstallerConfig.json`), () => {
@@ -194,7 +194,7 @@ module.exports.onStart = function () {
                     });
             }
 
-            function resignOrInstall(buffer) {
+            function resignOrInstall(buffer, repoUrl) {
                 if (isTizen7OrHigher) {
                     const config = readConfig();
                     const certificates = {
@@ -207,14 +207,14 @@ module.exports.onStart = function () {
                     resignPackage(certificates, buffer)
                         .then(resignedBuffer => {
                             wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.parsing'));
-                            parseAndInstall(resignedBuffer);
+                            parseAndInstall(resignedBuffer, repoUrl);
                         })
                         .catch(err => {
                             wsConn.send(wsConn.Event(Events.Error, `Error resigning package: ${err.message}`));
                         });
                 } else {
                     wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.parsing'));
-                    parseAndInstall(buffer);
+                    parseAndInstall(buffer, repoUrl);
                 }
             }
 
@@ -255,10 +255,14 @@ module.exports.onStart = function () {
                         fetchLatestRelease(payload.url)
                             .then(release => {
                                 const asset = release.assets.find(a => a.name.endsWith('.wgt') || a.name.endsWith('.tpk'));
+                                if (!asset) {
+                                    wsConn.send(wsConn.Event(Events.Error, 'No .wgt or .tpk asset found in latest release'));
+                                    return;
+                                }
                                 fetch(asset.browser_download_url)
                                     .then(res => res.buffer())
                                     .then(buffer => {
-                                        resignOrInstall(buffer)
+                                        resignOrInstall(buffer, payload.url)
                                     })
                                     .catch(err => {
                                         wsConn.send(wsConn.Event(Events.Error, `Error fetching release asset: ${err.message}`));
@@ -269,7 +273,7 @@ module.exports.onStart = function () {
                     } else {
                         // USB installation
                         const fileBuffer = readFileSync(payload.url);
-                        resignOrInstall(fileBuffer);
+                        resignOrInstall(fileBuffer, null);
                     }
 
                     break;
