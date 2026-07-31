@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const xml2js = require('xml2js');
 const JSZip = require('jszip');
 
@@ -6,30 +6,73 @@ const JSZip = require('jszip');
 
 function installPackage(packagePath, id, adbClient) {
     if (adbClient) {
-        // Install with vd_appinstall (wascmd wrapper for SDB)
         return new Promise((resolve, reject) => {
-            const stream = adbClient.createStream(`shell:0 vd_appinstall ${id} ${packagePath}`);
-            let data = '';
-            stream.on('data', (chunk) => {
-                data += `${chunk}\n`;
-                if (data.indexOf('spend time') !== -1) resolve(data);
-            });
-            stream.on('error', (error) => {
-                reject(new Error(`ADB Error: ${error}`));
-            });
-            stream.on('end', () => {
-                resolve(data);
-            });
-            stream.on('close', () => {
-                resolve(data);
-            });
+            var stream;
+            var uninstalled = false;
+
+            // First try to uninstall any residual installation
+            var uninstallStream;
+            try {
+                uninstallStream = adbClient.createStream(`shell:0 vd_appuninstall ${id}`);
+            } catch (e) {
+                // Ignore uninstall errors, proceed to install
+            }
+            if (uninstallStream) {
+                uninstallStream.on('data', () => {});
+                uninstallStream.on('end', () => {
+                    console.log('[installPackage] uninstall attempt completed for', id);
+                    doInstall();
+                });
+                uninstallStream.on('close', () => {
+                    console.log('[installPackage] uninstall stream closed for', id);
+                    doInstall();
+                });
+                uninstallStream.on('error', () => {
+                    console.log('[installPackage] uninstall error, proceeding to install');
+                    doInstall();
+                });
+                // Fallback timeout in case uninstall stream doesn't close
+                setTimeout(() => {
+                    if (!uninstalled) doInstall();
+                }, 3000);
+            } else {
+                doInstall();
+            }
+
+            function doInstall() {
+                if (uninstalled) return;
+                uninstalled = true;
+                try {
+                    stream = adbClient.createStream(`shell:0 vd_appinstall ${id} ${packagePath}`);
+                } catch (e) {
+                    return reject(new Error('Failed to create ADB stream: ' + e.message));
+                }
+                let data = '';
+                stream.on('data', (chunk) => {
+                    data += `${chunk}\n`;
+                    console.log('[installPackage] vd_appinstall output chunk:', chunk.toString());
+                    if (data.indexOf('spend time') !== -1) resolve(data);
+                });
+                stream.on('error', (error) => {
+                    console.error('[installPackage] stream error:', error);
+                    reject(new Error(`ADB Error: ${error}`));
+                });
+                stream.on('end', () => {
+                    console.log('[installPackage] stream ended, full output:', data);
+                    resolve(data);
+                });
+                stream.on('close', () => {
+                    console.log('[installPackage] stream closed, full output:', data);
+                    resolve(data);
+                });
+            }
         });
     }
     try {
-        const output = execSync(`wascmd -i ${id} -p ${packagePath}`, { encoding: 'utf8' });
-        return output;
+        const output = execFileSync('wascmd', ['-i', id, '-p', packagePath], { encoding: 'utf8' });
+        return Promise.resolve(output);
     } catch (error) {
-        throw new Error(`Failed to install package: ${error.message}`);
+        return Promise.reject(new Error(`Failed to install package: ${error.message}`));
     }
 }
 
@@ -56,7 +99,7 @@ function parsePackage(buffer) {
                         };
                     });
             } else {
-                return null;
+                return Promise.reject(new Error('No config.xml or tizen-manifest.xml found in package'));
             }
         });
 }
