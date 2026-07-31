@@ -1,20 +1,36 @@
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 
 function getValue(valueName) {
-    const cmd = execSync(`buxton2ctl get system ${valueName}`, { encoding: 'utf8' });
-    const value = cmd.split(':')[1].trim();
-    return value;
+    try {
+        const cmd = execFileSync('buxton2ctl', ['get', 'system', valueName], { encoding: 'utf8' });
+        const value = cmd.split(':')[1].trim();
+        return value;
+    } catch (e) {
+        throw new Error('Failed to get buxton value ' + valueName + ': ' + e.message);
+    }
 }
 
 function setValue(valueName, type, value) {
-    execSync(`buxton2ctl set-${type} system ${valueName} ${value}`, { encoding: 'utf8' });
+    try {
+        execFileSync('buxton2ctl', ['set-' + type, 'system', valueName, value], { encoding: 'utf8' });
+    } catch (e) {
+        throw new Error('Failed to set buxton value ' + valueName + ': ' + e.message);
+    }
 }
 
 function getDuid(adbClient, isTV) {
     return new Promise((resolve, reject) => {
-        const stream = adbClient.createStream('shell:0 getduid')
+        var stream;
+        try {
+            stream = adbClient.createStream('shell:0 getduid')
+        } catch (e) {
+            return reject(new Error('Failed to create ADB stream for getduid: ' + e.message));
+        }
+        var resolved = false;
         stream.on('data', (data) => {
             const duid = data.toString().trim();
+            if (resolved) return;
+            resolved = true;
             if (adbClient._stream && isTV) {
                 adbClient._stream.removeAllListeners('connect');
                 adbClient._stream.removeAllListeners('error');
@@ -27,7 +43,7 @@ function getDuid(adbClient, isTV) {
             resolve(duid);
         });
         stream.on('error', (error) => {
-            reject(error);
+            if (!resolved) reject(error);
         });
     });
 }

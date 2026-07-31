@@ -19,7 +19,7 @@ class Connection {
     }
 }
 
-const Events = {
+const Events = Object.freeze({
     InstallPackage: 1,
     NavigateDirectory: 2,
     Error: 3,
@@ -27,7 +27,7 @@ const Events = {
     DeleteConfiguration: 5,
     ConnectToTV: 6,
     InstallFile: 7
-};
+});
 
 module.exports = {
     Connection,

@@ -9,11 +9,14 @@ function readConfig() {
         distributorCert: null,
         password: null
     };
-    if (!existsSync(`${homedir()}/share/tizenbrewInstallerConfig.json`)) {
+    var configPath = require('path').join(homedir(), 'share', 'tizenbrewInstallerConfig.json');
+    if (!existsSync(configPath)) {
         return defaultConfig;
     }
     try {
-        return JSON.parse(readFileSync(`${homedir()}/share/tizenbrewInstallerConfig.json`, 'utf8'));
+        var parsed = JSON.parse(readFileSync(configPath, 'utf8'));
+        // Merge with defaults to ensure all fields exist
+        return Object.assign(defaultConfig, parsed);
     } catch (e) {
         console.error('Failed to parse installer config, using defaults:', e);
         return defaultConfig;
@@ -21,11 +24,18 @@ function readConfig() {
 }
 
 function writeConfig(config) {
-    if (!existsSync(`${homedir()}/share`)) {
-        mkdirSync(`${homedir()}/share`);
+    var shareDir = require('path').join(homedir(), 'share');
+    var configPath = require('path').join(shareDir, 'tizenbrewInstallerConfig.json');
+    if (!existsSync(shareDir)) {
+        try {
+            mkdirSync(shareDir, { recursive: true });
+        } catch (e) {
+            console.error('Failed to create share directory:', e);
+            return;
+        }
     }
     try {
-        writeFileSync(`${homedir()}/share/tizenbrewInstallerConfig.json`, JSON.stringify(config, null, 4));
+        writeFileSync(configPath, JSON.stringify(config, null, 4));
     } catch (e) {
         console.error('Failed to write installer config:', e);
     }
