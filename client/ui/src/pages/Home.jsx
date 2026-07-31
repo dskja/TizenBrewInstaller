@@ -49,7 +49,7 @@ export default function Home() {
                 }
             } catch (e) { }
         }
-    }, [context.state.client, context.state.client?.socket?.readyState]);
+    }, [context.state.client, context.state.client && context.state.client.socket && context.state.client.socket.readyState]);
 
     return (
         <div className="relative isolate lg:px-8">
@@ -63,19 +63,21 @@ export default function Home() {
                             alt="Sign In QR Code" 
                             className="mt-2 w-80 h-80 max-w-full max-h-[60vw] object-contain mx-auto border-8 rounded-lg"
                         />
-                        <p className="mt-4 text-lg">{t('resigning.resigningRequiredAccessInfo', { ip: webapis.network.getIp() })}</p>
+                        <p className="mt-4 text-lg">{t('resigning.resigningRequiredAccessInfo', { ip: (function() { try { return webapis.network.getIp(); } catch (e) { return 'localhost'; } })() })}</p>
                         <p className="mt-4 text-lg">{t('resigning.resigningDeviceSameNetwork')}</p>
                     </div>
                 </div>
             )}
             <div className="mx-auto flex flex-wrap justify-center gap-4 top-4 relative">
                 <Item onClick={() => {
-                    context.state.client.send({
-                        type: Events.InstallPackage,
-                        payload: {
-                            url: 'dskja/TizenBrew'
-                        }
-                    })
+                    if (context.state.client) {
+                        context.state.client.send({
+                            type: Events.InstallPackage,
+                            payload: {
+                                url: 'dskja/TizenBrew'
+                            }
+                        });
+                    }
                 }}>
                     <h3 className='text-indigo-400 text-base/7 font-semibold'>
                         {isTizenBrewInstalled ? (
