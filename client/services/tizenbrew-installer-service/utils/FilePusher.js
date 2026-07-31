@@ -4,10 +4,30 @@ const commands = AdbPacket.commands;
 
 module.exports = function (adb, filePath, data, cb) {
     const shell = adb.createStream('sync:');
-    
-    const inverval = setInterval(() => {
+    var hasCalledCb = false;
+    var hasStarted = false;
+    var interval = null;
+
+    function safeCb(err) {
+        if (hasCalledCb) return;
+        hasCalledCb = true;
+        if (interval) clearInterval(interval);
+        clearTimeout(timeout);
+        cb(err);
+    }
+
+    shell.on('error', function(err) {
+        safeCb(err);
+    });
+
+    var timeout = setTimeout(function() {
+        if (!hasStarted) safeCb(new Error('FilePusher timeout: stream never connected'));
+    }, 10000);
+
+    interval = setInterval(() => {
         if (shell._remoteId === -1) return;
-        clearInterval(inverval);
+        hasStarted = true;
+        clearInterval(interval);
 
         const statBuffer = Buffer.alloc(8);
         statBuffer.write('STAT', 0);
@@ -54,6 +74,6 @@ module.exports = function (adb, filePath, data, cb) {
         const quitData = Buffer.alloc(8);
         quitData.write('QUIT');
         adb._writePacket(commands.WRTE, shell._localId, shell._remoteId, quitData);
-        cb();
+        safeCb(null);
     }, 500);
 }
