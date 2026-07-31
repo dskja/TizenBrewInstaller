@@ -15,6 +15,7 @@ export default function InstallFromUSB() {
     }, [state.sharedData.directory]);
 
     useEffect(() => {
+        if (!state.client) return;
         state.client.send({
             type: Events.NavigateDirectory,
             payload: '/media'
@@ -28,7 +29,7 @@ export default function InstallFromUSB() {
             <h1 className="text-3xl font-bold text-indigo-400 mb-8 text-center w-full">Install From USB</h1>
             <div className="w-full max-w-2xl rounded-lg shadow-md p-6 bg-slate-900 flex flex-col items-center">
                 <ul className="space-y-3 w-full">
-                    {state.sharedData.directory.map((file, idx) => {
+                    {state.sharedData.directory && state.sharedData.directory.map((file, idx) => {
                         return (
                             <FocusableListItem
                                 key={file.path}
@@ -40,7 +41,7 @@ export default function InstallFromUSB() {
                                             type: Events.NavigateDirectory,
                                             payload: file.path
                                         });
-                                    } else if (file.name.endsWith('.wgt') || file.name.endsWith('.tpk')) {
+                                    } else if (file.name.indexOf('.wgt') === file.name.length - 4 || file.name.indexOf('.tpk') === file.name.length - 4) {
                                         state.client.send({
                                             type: Events.InstallPackage,
                                             payload: {

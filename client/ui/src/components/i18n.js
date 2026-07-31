@@ -20,7 +20,7 @@ function InitI18next(lng) {
       lng,
       fallbackLng: 'en',
       resources,
-      debug: true,
+      debug: false,
       interpolation: {
         escapeValue: false,
       }

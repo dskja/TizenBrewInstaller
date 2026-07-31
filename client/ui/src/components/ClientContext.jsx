@@ -7,7 +7,7 @@ const initialState = {
         directory: [],
         error: {
             message: null,
-            dissapear: false
+            disappear: false
         },
         qrCodeShow: false,
         connectedToTV: false

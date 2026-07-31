@@ -45,7 +45,7 @@ export default function Header() {
                     <div className="mx-auto lg:max-w-[30vw] h-[2.5vh]">
                         <div className="sm:mb-8 sm:flex sm:justify-center">
                             <div className="relative rounded-full px-3 py-1 text-xl text-gray-200 ring-1 ring-gray-900/10 hover:ring-gray-900/20">
-                                {t(state?.sharedData?.state || '...')}
+                                {t((state && state.sharedData && state.sharedData.state) || '...')}
                             </div>
                         </div>
                     </div>

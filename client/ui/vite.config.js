@@ -23,7 +23,7 @@ export default defineConfig({
     terserOptions: {
       ecma: 5
     },
-    target: 'es2015',
+    target: 'es5',
     rollupOptions: {
       external: ['react-native'],
     }

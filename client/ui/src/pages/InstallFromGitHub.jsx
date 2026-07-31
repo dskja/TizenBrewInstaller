@@ -37,11 +37,12 @@ export default function InstallFromGitHub() {
         setIsInstalling(true);
         setError('');
 
-        console.log('Installing from GitHub:', name);
+        var trimmedName = name.trim();
+        console.log('Installing from GitHub:', trimmedName);
         state.client.send({
             type: Events.InstallPackage,
             payload: {
-                url: name
+                url: trimmedName
             }
         });
 

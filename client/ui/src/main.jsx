@@ -8,13 +8,14 @@ init({ });
 
 window.addEventListener('keydown', (e) => {
     if (e.keyCode === 13) {
-        document.querySelector('.focus')?.click();
+        var focusedEl = document.querySelector('.focus');
+        if (focusedEl) focusedEl.click();
     } else if (e.keyCode === 10009) {
         if (location.pathname !== '/tizenbrew-ui/dist/index.html') {
             history.back();
             setFocus('sn:focusable-item-1');
         } else {
-            tizen.application.getCurrentApplication().exit();
+            try { tizen.application.getCurrentApplication().exit(); } catch (e) {}
         }
     }
 });

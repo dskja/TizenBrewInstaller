@@ -35,7 +35,9 @@ export default function App() {
     }
   }, [context.state.sharedData.error.disappear]);
   useEffect(() => {
-    setHeaderHeight(headerRef.current.base.clientHeight);
+    if (headerRef.current && headerRef.current.base) {
+      setHeaderHeight(headerRef.current.base.clientHeight);
+    }
   }, [headerRef]);
 
   useEffect(() => {
@@ -77,25 +79,28 @@ function startService(context) {
   const testWS = new WebSocket('ws://localhost:8091');
 
   testWS.onerror = () => {
-    const pkgId = tizen.application.getCurrentApplication().appInfo.packageId;
+    try {
+      const pkgId = tizen.application.getCurrentApplication().appInfo.packageId;
+      const serviceId = pkgId + ".InstallerService";
 
-    const serviceId = pkgId + ".InstallerService";
+      tizen.application.launchAppControl(
+        new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
+        serviceId,
+        function () {
+          context.dispatch({
+            type: 'SET_STATE',
+            payload: 'service.started'
+          });
 
-    tizen.application.launchAppControl(
-      new tizen.ApplicationControl("http://tizen.org/appcontrol/operation/service"),
-      serviceId,
-      function () {
-        context.dispatch({
-          type: 'SET_STATE',
-          payload: 'service.started'
-        });
-
-        window.location.reload();
-      },
-      function (e) {
-        alert("Launch Service failed: " + e.message);
-      }
-    );
+          window.location.reload();
+        },
+        function (e) {
+          alert("Launch Service failed: " + e.message);
+        }
+      );
+    } catch (e) {
+      alert("Launch Service failed: " + e.message);
+    }
   }
 
   testWS.onopen = () => {
