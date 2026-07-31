@@ -16,20 +16,23 @@ export default function Desktop() {
 
 
     function onInputChange(event) {
-        const file = event.target.files[0];
+        var file = event.target.files && event.target.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const dataUrl = e.target.result;
-
-                const base64Data = dataUrl.split(',')[1];
-
-                context.state.client.send({
-                    type: Events.InstallFile,
-                    payload: base64Data
-                });
-            }
-
+                var dataUrl = e.target && e.target.result;
+                if (!dataUrl) return;
+                var base64Data = dataUrl.split(',')[1];
+                if (context.state.client) {
+                    context.state.client.send({
+                        type: Events.InstallFile,
+                        payload: base64Data
+                    });
+                }
+            };
+            reader.onerror = function() {
+                alert('Failed to read file');
+            };
             reader.readAsDataURL(file);
         }
     }
