@@ -3,6 +3,8 @@
 const isTV = typeof tizen !== 'undefined';
 // Required due to svdca.samsungqbe.com certificate expiring and Samsung not doing anything.
 // Also for older Tizen TVs who had their root certificate break.
+// Note: This disables TLS globally. A scoped HTTPS agent would be better but node-fetch v2
+// on Tizen 3 (Node 4.4.3) doesn't support per-request agents easily. This is a known trade-off.
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 // To remove the DeprecationWarning displayed.
@@ -54,8 +56,10 @@ module.exports.onStart = function () {
     });
 
     let isTizen7OrHigher = isTV ? (Number(tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').split('.')[0]) >= 7) : false;
-    const isTizen3 = isTV && tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').startsWith('3.0');
-    const wsServer = new WebSocket.Server({ server: app.listen(8091) });
+    const isTizen3 = isTV && String(tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version')).indexOf('3.0') === 0;
+    const wsServer = new WebSocket.Server({ server: app.listen(8091, function(err) {
+        if (err) console.error('Failed to listen on port 8091:', err);
+    }) });
 
     function checkCanConnectToDevice() {
         fetch('http://127.0.0.1:8001/api/v2/').then(res => {
@@ -144,18 +148,26 @@ module.exports.onStart = function () {
             }
 
             function parseAndInstall(buffer, repoUrl) {
+                console.log('[parseAndInstall] buffer size:', buffer.length, 'repoUrl:', repoUrl);
                 parsePackage(buffer)
                     .then(pkg => {
+                        console.log('[parseAndInstall] parsed package:', JSON.stringify(pkg));
                         wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.installing'));
                         if (isTV) {
                             if (!existsSync('/home/owner/share/tmp/sdk_tools')) mkdirRecursive(`/home/owner/share/tmp/sdk_tools`);
                             writeFileSync(`/home/owner/share/tmp/sdk_tools/package.${pkg.isWgt ? 'wgt' : 'tpk'}`, buffer);
                         } else {
                             PushFile(adbClient, `/home/owner/share/tmp/sdk_tools/package.${pkg.isWgt ? 'wgt' : 'tpk'}`, buffer, () => {
+                                console.log('[parseAndInstall] file pushed, starting install for', pkg.packageId);
                                 installPackage(`/home/owner/share/tmp/sdk_tools/package.${pkg.isWgt ? 'wgt' : 'tpk'}`, pkg.packageId, adbClient)
                                     .then(result => {
+                                        console.log('[parseAndInstall] install SUCCESS:', result);
                                         wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.installed'));
                                         wsConn.send(wsConn.Event(Events.InstallPackage, { response: 0, result }));
+                                    })
+                                    .catch(err => {
+                                        console.error('[parseAndInstall] install FAILED:', err.message);
+                                        wsConn.send(wsConn.Event(Events.Error, 'Installation failed: ' + err.message));
                                     });
                             });
                             return;
@@ -170,11 +182,16 @@ module.exports.onStart = function () {
                         }
 
                         if (isTizen3 && isTV) {
-                            const result = installPackage(`/home/owner/share/tmp/sdk_tools/package.${pkg.isWgt ? 'wgt' : 'tpk'}`, pkg.packageId);
-                            setValue('db/sdk/develop/ip', 'string', '127.0.0.1');
-                            setValue('db/sdk/develop/mode', 'int32', '1');
-                            wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.installed'));
-                            wsConn.send(wsConn.Event(Events.InstallPackage, { response: 0, result }));
+                            installPackage(`/home/owner/share/tmp/sdk_tools/package.${pkg.isWgt ? 'wgt' : 'tpk'}`, pkg.packageId)
+                                .then(result => {
+                                    setValue('db/sdk/develop/ip', 'string', '127.0.0.1');
+                                    setValue('db/sdk/develop/mode', 'int32', '1');
+                                    wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.installed'));
+                                    wsConn.send(wsConn.Event(Events.InstallPackage, { response: 0, result }));
+                                })
+                                .catch(err => {
+                                    wsConn.send(wsConn.Event(Events.Error, 'Installation failed: ' + err.message));
+                                });
                         } else if (isTV) {
                             createAdbConnection()
                                 .then(adbClient => {
@@ -186,10 +203,13 @@ module.exports.onStart = function () {
                                                 adbClient._stream.end();
                                                 adbClient._stream.destroy();
                                             }, 5000);
+                                        })
+                                        .catch(err => {
+                                            wsConn.send(wsConn.Event(Events.Error, 'Installation failed: ' + err.message));
                                         });
                                 })
                                 .catch(err => {
-                                    wsConn.send(wsConn.Event(Events.Error, err.message.includes('.') ? err.message : `Error creating ADB connection: ${err.message}`));
+                                    wsConn.send(wsConn.Event(Events.Error, err.message.indexOf('.') !== -1 ? err.message : 'Error creating ADB connection: ' + err.message));
                                 });
                         }
                     })
@@ -200,7 +220,7 @@ module.exports.onStart = function () {
             }
 
             function resignOrInstall(buffer, repoUrl) {
-                if (isTizen7OrHigher) {
+                if (isTizen7OrHigher || !isTV) {
                     const config = readConfig();
                     const certificates = {
                         authorCert: Buffer.from(config.authorCert, 'base64').toString('binary'),
@@ -211,10 +231,12 @@ module.exports.onStart = function () {
                     wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.resigning'));
                     resignPackage(certificates, buffer)
                         .then(resignedBuffer => {
+                            console.log('[resignOrInstall] resigning successful, new buffer size:', resignedBuffer.length);
                             wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.parsing'));
                             parseAndInstall(resignedBuffer, repoUrl);
                         })
                         .catch(err => {
+                            console.error('[resignOrInstall] resigning FAILED:', err.message);
                             wsConn.send(wsConn.Event(Events.Error, `Error resigning package: ${err.message}`));
                         });
                 } else {
@@ -230,8 +252,7 @@ module.exports.onStart = function () {
                         return false;
                     } else if (canConnectToDevice === null) return false;
                 }
-                if (isTizen7OrHigher) {
-                    // Check if we have author and distributor certificates
+                if (isTizen7OrHigher || !isTV) {
                     const config = readConfig();
                     if (!config.authorCert || !config.distributorCert || !config.password) {
                         wsConn.send(wsConn.Event(Events.InstallPackage, { response: 2 }));
@@ -254,12 +275,27 @@ module.exports.onStart = function () {
                 case Events.InstallPackage: {
                     if (!checkPrecondition()) return;
 
-                    if (payload.url.split('/').length === 2) {
+                    if (!payload || !payload.url) {
+                        wsConn.send(wsConn.Event(Events.Error, 'Invalid payload: missing url'));
+                        return;
+                    }
+                    var cleanUrl = payload.url.trim();
+                    // Strip full GitHub URL if provided (e.g. https://github.com/dskja/TizenBrew)
+                    if (cleanUrl.indexOf('https://github.com/') === 0) {
+                        cleanUrl = cleanUrl.substring('https://github.com/'.length);
+                    } else if (cleanUrl.indexOf('http://github.com/') === 0) {
+                        cleanUrl = cleanUrl.substring('http://github.com/'.length);
+                    }
+                    // Remove trailing slash
+                    if (cleanUrl.charAt(cleanUrl.length - 1) === '/') {
+                        cleanUrl = cleanUrl.substring(0, cleanUrl.length - 1);
+                    }
+                    if (cleanUrl.split('/').length === 2) {
                         // GitHub repository
                         wsConn.send(wsConn.Event(Events.InstallationStatus, 'installStatus.fetching'));
-                        fetchLatestRelease(payload.url)
+                        fetchLatestRelease(cleanUrl)
                             .then(release => {
-                                const asset = release.assets.find(a => a.name.endsWith('.wgt') || a.name.endsWith('.tpk'));
+                                const asset = release.assets.find(a => a.name.indexOf('.wgt') === a.name.length - 4 || a.name.indexOf('.tpk') === a.name.length - 4);
                                 if (!asset) {
                                     wsConn.send(wsConn.Event(Events.Error, 'No .wgt or .tpk asset found in latest release'));
                                     return;
@@ -270,7 +306,7 @@ module.exports.onStart = function () {
                                         return res.buffer();
                                     })
                                     .then(buffer => {
-                                        resignOrInstall(buffer, payload.url)
+                                        resignOrInstall(buffer, cleanUrl)
                                     })
                                     .catch(err => {
                                         wsConn.send(wsConn.Event(Events.Error, `Error fetching release asset: ${err.message}`));
@@ -288,7 +324,17 @@ module.exports.onStart = function () {
                 }
 
                 case Events.NavigateDirectory: {
-                    const directory = readdirSync(payload);
+                    if (!payload) {
+                        wsConn.send(wsConn.Event(Events.Error, 'Invalid directory path'));
+                        break;
+                    }
+                    var directory;
+                    try {
+                        directory = readdirSync(payload);
+                    } catch (e) {
+                        wsConn.send(wsConn.Event(Events.Error, 'Failed to read directory: ' + e.message));
+                        break;
+                    }
                     const metadata = [{
                         name: 'Go up one directory',
                         path: payload !== '/media' ? join(payload, '..') : '/media',
@@ -310,6 +356,10 @@ module.exports.onStart = function () {
                 }
                 case Events.InstallFile: {
                     if (!checkPrecondition()) return;
+                    if (!payload) {
+                        wsConn.send(wsConn.Event(Events.Error, 'Invalid payload: missing file data'));
+                        break;
+                    }
                     const fileBuffer = Buffer.from(payload, 'base64');
                     resignOrInstall(fileBuffer, null);
                     break;
@@ -383,6 +433,11 @@ module.exports.onStart = function () {
             function createCert() {
                 createSamsungCertificate(authorInfo, accessInfo, adbClient, isTV)
                     .then(certificate => {
+                        console.log('[createCert] certificate received');
+                        console.log('[createCert] distributorXML length:', certificate.distributorXML ? certificate.distributorXML.length : 'null');
+                        console.log('[createCert] distributorXML starts with:', certificate.distributorXML ? certificate.distributorXML.substring(0, 100) : 'null');
+                        console.log('[createCert] authorCert length:', certificate.authorCert ? certificate.authorCert.length : 'null');
+                        console.log('[createCert] distributorCert length:', certificate.distributorCert ? certificate.distributorCert.length : 'null');
                         const currentConfig = readConfig();
                         currentConfig.authorCert = Buffer.from(certificate.authorCert, 'binary').toString('base64');
                         currentConfig.distributorCert = Buffer.from(certificate.distributorCert, 'binary').toString('base64');
@@ -408,9 +463,10 @@ module.exports.onStart = function () {
 
             if (isTV) {
                 if (!adbClient && !isConnected) {
-                    createAdbConnection().then(adbClient => {
+                    createAdbConnection().then(function(adb) {
+                        adbClient = adb;
                         createCert();
-                    }).catch(err => {
+                    }).catch(function(err) {
                         response.status(500).json({ error: err.message });
                     });
                 } else createCert();
@@ -423,7 +479,9 @@ module.exports.onStart = function () {
         }
     });
 
-    appAccess.listen(4794);
+    appAccess.listen(4794, function(err) {
+        if (err) console.error('Failed to listen on port 4794:', err);
+    });
 }
 
 !isTV && module.exports.onStart();
