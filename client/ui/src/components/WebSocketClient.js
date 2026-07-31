@@ -47,7 +47,12 @@ class Client {
     }
 
     onMessage(event) {
-        const data = JSON.parse(event.data);
+        var data;
+        try {
+            data = JSON.parse(event.data);
+        } catch (e) {
+            return;
+        }
         const { type, payload } = data;
 
         switch (type) {
@@ -60,7 +65,8 @@ class Client {
                         payload: true
                     });
                 } else if (payload.response === 0) {
-                    const installFailedLine = payload.result.split('\n').find(line => line.includes('install failed'));
+                    var resultStr = payload.result ? String(payload.result) : '';
+                    var installFailedLine = resultStr.split('\n').find(function(line) { return line.indexOf('install failed') !== -1; });
                     if (installFailedLine) {
                         this.context.dispatch({
                             type: 'SET_ERROR',
@@ -70,7 +76,7 @@ class Client {
                             }
                         });
 
-                        if (installFailedLine.includes('Check certificate error')) {
+                        if (installFailedLine.indexOf('Check certificate error') !== -1) {
                             this.send({
                                 type: Events.DeleteConfiguration
                             });
@@ -119,14 +125,14 @@ class Client {
                 // Handle connection to the TV
                 this.context.dispatch({
                     type: 'SET_CONNECTED_TO_TV',
-                    payload: payload.success
+                    payload: payload && payload.success
                 });
                 
-                if (!payload.success) {
+                if (payload && !payload.success) {
                     this.context.dispatch({
                         type: 'SET_ERROR',
                         payload: {
-                            message: payload.error,
+                            message: payload.error || 'Connection failed',
                             disappear: false
                         }
                     });
@@ -137,7 +143,9 @@ class Client {
     }
 
     send(data) {
-        this.socket.send(JSON.stringify(data));
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            this.socket.send(JSON.stringify(data));
+        }
     }
 }
 
