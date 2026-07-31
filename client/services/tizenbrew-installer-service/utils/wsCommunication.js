@@ -1,11 +1,14 @@
+"use strict";
+
 class Connection {
     constructor(connection) {
         this.connection = connection;
-
     }
 
     send(data) {
-        this.connection.send(JSON.stringify(data));
+        if (this.connection && this.connection.readyState === this.connection.OPEN) {
+            this.connection.send(JSON.stringify(data));
+        }
     }
 
     Event(event, payload) {

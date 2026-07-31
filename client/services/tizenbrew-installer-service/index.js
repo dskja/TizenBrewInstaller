@@ -53,12 +53,15 @@ module.exports.onStart = function () {
         } else res.sendFile((join(__dirname, '../../ui/dist/index.html')));
     });
 
-    let isTizen7OrHigher = isTV && Number(tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').split('.')[0]) >= 7;
+    let isTizen7OrHigher = isTV ? (Number(tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').split('.')[0]) >= 7) : false;
     const isTizen3 = isTV && tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version').startsWith('3.0');
     const wsServer = new WebSocket.Server({ server: app.listen(8091) });
 
     function checkCanConnectToDevice() {
-        fetch('http://127.0.0.1:8001/api/v2/').then(res => res.json())
+        fetch('http://127.0.0.1:8001/api/v2/').then(res => {
+            if (!res.ok) throw new Error('API v2 returned ' + res.status);
+            return res.json();
+        })
             .then(json => {
                 canConnectToDevice = (json.device.developerIP === '127.0.0.1' || json.device.developerIP === '1.0.0.127') && json.device.developerMode === '1';
             }).catch(err => {
@@ -262,7 +265,10 @@ module.exports.onStart = function () {
                                     return;
                                 }
                                 fetch(asset.browser_download_url)
-                                    .then(res => res.buffer())
+                                    .then(res => {
+                                        if (!res.ok) throw new Error('Download failed: ' + res.status);
+                                        return res.buffer();
+                                    })
                                     .then(buffer => {
                                         resignOrInstall(buffer, payload.url)
                                     })
@@ -352,7 +358,13 @@ module.exports.onStart = function () {
 
     appAccess.use((request, response) => {
         if (request.method !== 'GET') {
-            const body = JSON.parse(request.body.code);
+            var body;
+            try {
+                body = JSON.parse(request.body.code);
+            } catch (e) {
+                response.status(400).send('Invalid JSON in code field');
+                return;
+            }
             const accessInfo = {
                 accessToken: body.access_token,
                 userId: body.userId
