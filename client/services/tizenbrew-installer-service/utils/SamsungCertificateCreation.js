@@ -16,18 +16,21 @@ function createSamsungCertificate(authorInfo, accessInfo, adbClient, isTV) {
                         reject(new Error(`Samsung Certificate Creation Error: ${error.message}`));
                     });
             })
+            .catch(error => {
+                reject(new Error(`Failed to get DUID: ${error.message}`));
+            });
     });
 }
 
 function resignPackage(certificates, packageBuffer) {
-    return new Promise(async (resolve, reject) => {
+    return (async function() {
         try {
             const zip = await JSZip.loadAsync(packageBuffer);
             const files = await Promise.all(
                 Object.keys(zip.files).map(async (filename) => {
                     const file = zip.files[filename];
                     if (file.dir) return null;
-                    if (file.name.includes('signature') && file.name.endsWith('.xml')) return null;
+                    if (file.name.indexOf('signature') !== -1 && file.name.indexOf('.xml') !== -1 && file.name.lastIndexOf('.xml') === file.name.length - 4) return null;
                     const data = await file.async('nodebuffer');
                     return {
                         uri: encodeURIComponent(filename),
@@ -54,11 +57,11 @@ function resignPackage(certificates, packageBuffer) {
                 newZip.file(decodeURIComponent(file.uri), file.data);
             }
 
-            resolve(await newZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' }));
+            return await newZip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
         } catch (error) {
-            reject(new Error(`Resigning Package Error: ${error.message}`));
+            throw new Error('Resigning Package Error: ' + error.message);
         }
-    });
+    })();
 }
 
 module.exports = { createSamsungCertificate, resignPackage };
