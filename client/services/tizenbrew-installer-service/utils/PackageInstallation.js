@@ -29,7 +29,7 @@ function installPackage(packagePath, id, adbClient) {
         const output = execSync(`wascmd -i ${id} -p ${packagePath}`, { encoding: 'utf8' });
         return output;
     } catch (error) {
-        return error;
+        throw new Error(`Failed to install package: ${error.message}`);
     }
 }
 
