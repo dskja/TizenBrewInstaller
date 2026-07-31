@@ -37,6 +37,8 @@ module.exports.onStart = function () {
     }
 
     const app = express();
+    app.use(express.json());
+    app.use(express.urlencoded({ extended: true }));
     if (!isTV) {
         // Enable static file serving for frontend
         console.log('Open up http://localhost:8091/ui/dist/index.html to access the TizenBrew Installer.');
@@ -303,7 +305,8 @@ module.exports.onStart = function () {
                 case Events.InstallFile: {
                     if (!checkPrecondition()) return;
                     const fileBuffer = Buffer.from(payload, 'base64');
-                    resignOrInstall(fileBuffer);
+                    resignOrInstall(fileBuffer, null);
+                    break;
                 }
                 case Events.DeleteConfiguration: {
                     const config = readConfig();

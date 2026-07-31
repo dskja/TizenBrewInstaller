@@ -14,14 +14,6 @@ export default function Desktop() {
     const [ip, setIp] = useState('');
     const ipInputRef = useRef(null);
 
-    useEffect(() => {
-        if (
-            context.state.client !== null &&
-            context.state.client.socket &&
-            context.state.client.socket.readyState === WebSocket.OPEN
-        ) {
-        }
-    }, [context.state.client, context.state.client?.socket?.readyState]);
 
     function onInputChange(event) {
         const file = event.target.files[0];
@@ -68,7 +60,7 @@ export default function Desktop() {
                             context.state.client.send({
                                 type: Events.InstallPackage,
                                 payload: {
-                                    url: 'reisxd/TizenBrew'
+                                    url: 'dskja/TizenBrew'
                                 }
                             })
                         }}>
@@ -83,7 +75,7 @@ export default function Desktop() {
                             context.state.client.send({
                                 type: Events.InstallPackage,
                                 payload: {
-                                    url: 'reisxd/TizenBrewInstaller'
+                                    url: 'dskja/TizenBrewInstaller'
                                 }
                             })
                         }}>
@@ -137,7 +129,7 @@ export default function Desktop() {
                             }}
                             onBlur={(e) => {
                                 if (ip) {
-                                    state.client.send({
+                                    context.state.client.send({
                                         type: Events.ConnectToTV,
                                         payload: ip
                                     });

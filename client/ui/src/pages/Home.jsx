@@ -37,7 +37,7 @@ export default function Home() {
                 context.state.client.send({
                     type: Events.InstallPackage,
                     payload: {
-                        url: 'reisxd/TizenBrewInstaller'
+                        url: 'dskja/TizenBrewInstaller'
                     }
                 });
             }
@@ -73,7 +73,7 @@ export default function Home() {
                     context.state.client.send({
                         type: Events.InstallPackage,
                         payload: {
-                            url: 'reisxd/TizenBrew'
+                            url: 'dskja/TizenBrew'
                         }
                     })
                 }}>

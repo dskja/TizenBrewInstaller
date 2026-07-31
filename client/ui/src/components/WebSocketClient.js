@@ -13,13 +13,37 @@ const Events = {
 class Client {
     constructor(context) {
         this.context = context;
+        this.retryCount = 0;
+        this.maxRetries = 5;
+        this.connect();
+    }
+
+    connect() {
         this.socket = new WebSocket('ws://localhost:8091');
         this.socket.onopen = this.onOpen.bind(this);
         this.socket.onmessage = this.onMessage.bind(this);
-        this.socket.onerror = () => location.reload();
+        this.socket.onerror = this.onError.bind(this);
+        this.socket.onclose = this.onClose.bind(this);
     }
 
     onOpen() {
+        this.retryCount = 0;
+    }
+
+    onError() {
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            setTimeout(() => this.connect(), 2000);
+        } else {
+            location.reload();
+        }
+    }
+
+    onClose() {
+        if (this.retryCount < this.maxRetries) {
+            this.retryCount++;
+            setTimeout(() => this.connect(), 2000);
+        }
     }
 
     onMessage(event) {

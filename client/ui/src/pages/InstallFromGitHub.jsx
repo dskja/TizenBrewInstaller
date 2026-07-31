@@ -70,7 +70,7 @@ export default function InstallFromGitHub() {
                                 handleInstall();
                             }
                         }}
-                        placeholder="reisxd/TizenBrew or tizentwitch"
+                        placeholder="dskja/TizenBrew-Twitch or dskja/TizenBrew"
                         disabled={isInstalling}
                     />
                 </Item>
