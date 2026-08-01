@@ -1,6 +1,8 @@
 {
   "presets": [["@babel/preset-env", { "targets": { "node": "4.4.3" } }]],
   "ignore": [
-    "node_modules"
+    "node_modules",
+    "transpiled",
+    "dist"
   ]
 }

@@ -1,21 +1,40 @@
 const fetch = require('node-fetch');
 
 function fetchLatestRelease(repo) {
-    const url = `https://api.github.com/repos/${repo}/releases/latest`;
+    var cleanRepo = repo.trim();
+    if (cleanRepo.charAt(cleanRepo.length - 1) === '/') {
+        cleanRepo = cleanRepo.substring(0, cleanRepo.length - 1);
+    }
+    if (cleanRepo.indexOf('https://github.com/') === 0) {
+        cleanRepo = cleanRepo.substring('https://github.com/'.length);
+    } else if (cleanRepo.indexOf('http://github.com/') === 0) {
+        cleanRepo = cleanRepo.substring('http://github.com/'.length);
+    }
+    var url = 'https://api.github.com/repos/' + cleanRepo + '/releases/latest';
+    console.log('Fetching release from: ' + url);
     return fetch(url, {
         headers: {
-            'User-Agent': 'TizenBrew-Installer'
+            'User-Agent': 'TizenBrew-Installer',
+            'Accept': 'application/vnd.github+json'
         }
     })
-        .then(response => {
+        .then(function(response) {
             if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+                if (response.status === 404) {
+                    throw new Error('Repository or release not found: ' + cleanRepo + ' (404). Make sure the repo exists and has at least one published release.');
+                }
+                throw new Error('GitHub API error: ' + response.status + ' ' + response.statusText);
             }
             return response.json();
         })
-        .then(data => data)
-        .catch(err => {
-            throw new Error(`Failed to fetch release: ${err.message}`);
+        .then(function(data) {
+            if (!data || !data.assets) {
+                throw new Error('No release assets found for ' + cleanRepo);
+            }
+            return data;
+        })
+        .catch(function(err) {
+            throw new Error('Failed to fetch release: ' + err.message);
         });
 }
 
